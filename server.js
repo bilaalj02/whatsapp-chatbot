@@ -74,18 +74,32 @@ async function handleIncomingMessage(message, phoneNumberId) {
       
       // Parse lead information from message
       const leadData = parseLeadInfo(messageText);
+      console.log('Parsed lead data:', JSON.stringify(leadData));
       
       if (leadData) {
-        // Store lead in Notion
-        await storeLead(leadData, fromNumber);
-        
-        // Send confirmation message
-        await sendWhatsAppMessage(
-          fromNumber,
-          phoneNumberId,
-          '✅ Lead information received and stored successfully!'
-        );
+        console.log('Lead data is valid, attempting to store...');
+        try {
+          // Store lead in Notion
+          const result = await storeLead(leadData, fromNumber);
+          console.log('Successfully stored lead:', result.id);
+          
+          // Send confirmation message
+          await sendWhatsAppMessage(
+            fromNumber,
+            phoneNumberId,
+            '✅ Lead information received and stored successfully!'
+          );
+        } catch (storeError) {
+          console.error('Failed to store lead:', storeError);
+          // Send error message
+          await sendWhatsAppMessage(
+            fromNumber,
+            phoneNumberId,
+            '❌ Sorry, there was an error storing your information. Please try again.'
+          );
+        }
       } else {
+        console.log('Lead data is invalid or missing required fields');
         // Send instructions on how to format lead info
         await sendWhatsAppMessage(
           fromNumber,
@@ -94,7 +108,10 @@ async function handleIncomingMessage(message, phoneNumberId) {
           'Name: [Lead Name]\n' +
           'Business: [Business Name]\n' +
           'Email: [Email Address]\n' +
-          'Phone: [Phone Number]'
+          'Phone: [Phone Number]\n\n' +
+          'Or simply send:\n' +
+          'email@example.com\n' +
+          'Business Name'
         );
       }
     }
