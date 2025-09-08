@@ -209,23 +209,15 @@ async function storeLead(leadData, callerPhone, retryCount = 0) {
               }
             ]
           },
-          'Email': {
-            rich_text: [
-              {
-                text: {
-                  content: leadData.email || 'N/A'
-                }
-              }
-            ]
+          'Email': leadData.email ? {
+            email: leadData.email
+          } : {
+            rich_text: []
           },
-          'Phone': {
-            rich_text: [
-              {
-                text: {
-                  content: leadData.phone || 'N/A'
-                }
-              }
-            ]
+          'Phone': leadData.phone ? {
+            phone_number: leadData.phone
+          } : {
+            rich_text: []
           },
           'Caller': {
             rich_text: [
