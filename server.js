@@ -331,6 +331,84 @@ app.get('/test-notion', async (req, res) => {
   }
 });
 
+// Test creating a simple page
+app.get('/test-create', async (req, res) => {
+  try {
+    console.log('Testing page creation...');
+    
+    const response = await Promise.race([
+      notion.pages.create({
+        parent: { database_id: process.env.NOTION_DATABASE_ID },
+        properties: {
+          'Name': {
+            title: [
+              {
+                text: {
+                  content: 'Test Entry'
+                }
+              }
+            ]
+          },
+          'Business': {
+            rich_text: [
+              {
+                text: {
+                  content: 'Test Business'
+                }
+              }
+            ]
+          },
+          'Email': {
+            email: 'test@example.com'
+          },
+          'Phone': {
+            phone_number: '555-123-4567'
+          },
+          'Caller': {
+            rich_text: [
+              {
+                text: {
+                  content: 'Test Caller'
+                }
+              }
+            ]
+          },
+          'Date Added': {
+            date: {
+              start: new Date().toISOString().split('T')[0]
+            }
+          },
+          'Status': {
+            rich_text: [
+              {
+                text: {
+                  content: 'Test Status'
+                }
+              }
+            ]
+          }
+        }
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout after 15 seconds')), 15000)
+      )
+    ]);
+    
+    console.log('Page created successfully!', response.id);
+    res.status(200).json({ 
+      status: 'Page created successfully', 
+      page_id: response.id
+    });
+  } catch (error) {
+    console.error('Page creation failed:', error);
+    res.status(500).json({ 
+      status: 'Page creation failed', 
+      error: error.message,
+      code: error.code
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`WhatsApp Lead Bot server running on port ${PORT}`);
 });
