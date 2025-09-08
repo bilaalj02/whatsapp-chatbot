@@ -278,28 +278,43 @@ async function storeLead(leadData, callerPhone) {
   }
 }
 
-// Send WhatsApp message
+// Send WhatsApp message with timeout
 async function sendWhatsAppMessage(to, phoneNumberId, message) {
   try {
-    const response = await axios.post(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: to,
-        text: { body: message }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json'
+    console.log('Making WhatsApp API request...');
+    console.log('URL:', `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`);
+    console.log('Token (first 20 chars):', process.env.WHATSAPP_TOKEN?.substring(0, 20));
+    
+    const response = await Promise.race([
+      axios.post(
+        `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+        {
+          messaging_product: 'whatsapp',
+          to: to,
+          text: { body: message }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000 // 10 second timeout
         }
-      }
-    );
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('WhatsApp API timeout after 10 seconds')), 10000)
+      )
+    ]);
 
+    console.log('WhatsApp API response:', response.status);
     console.log('Message sent successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error sending WhatsApp message:', error.response?.data || error.message);
+    console.error('WhatsApp API Error details:');
+    console.error('- Error message:', error.message);
+    console.error('- Error code:', error.code);
+    console.error('- Response status:', error.response?.status);
+    console.error('- Response data:', error.response?.data);
     throw error;
   }
 }
