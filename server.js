@@ -297,6 +297,40 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Test Notion connection endpoint
+app.get('/test-notion', async (req, res) => {
+  try {
+    console.log('Testing Notion connection...');
+    console.log('Database ID:', process.env.NOTION_DATABASE_ID);
+    console.log('Token (first 20 chars):', process.env.NOTION_TOKEN?.substring(0, 20));
+    
+    // Test simple database query
+    const response = await Promise.race([
+      notion.databases.query({
+        database_id: process.env.NOTION_DATABASE_ID,
+        page_size: 1
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout after 10 seconds')), 10000)
+      )
+    ]);
+    
+    console.log('Notion connection successful!');
+    res.status(200).json({ 
+      status: 'Notion connection OK', 
+      database_id: process.env.NOTION_DATABASE_ID,
+      pages_found: response.results.length
+    });
+  } catch (error) {
+    console.error('Notion connection failed:', error);
+    res.status(500).json({ 
+      status: 'Notion connection failed', 
+      error: error.message,
+      code: error.code
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`WhatsApp Lead Bot server running on port ${PORT}`);
 });
