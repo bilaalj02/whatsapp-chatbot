@@ -228,15 +228,11 @@ async function storeLead(leadData, callerPhone, retryCount = 0) {
               }
             ]
           },
-          'Email': leadData.email ? {
-            email: leadData.email
-          } : {
-            rich_text: []
+          'Email': {
+            email: leadData.email || 'unknown@example.com'
           },
-          'Phone': leadData.phone ? {
-            phone_number: leadData.phone
-          } : {
-            rich_text: []
+          'Phone': {
+            phone_number: leadData.phone || '000-000-0000'
           },
           'Caller': {
             rich_text: [
@@ -264,7 +260,7 @@ async function storeLead(leadData, callerPhone, retryCount = 0) {
         }
       }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000) // 10 second timeout
+        setTimeout(() => reject(new Error('Timeout')), 8000) // Shorter timeout
       )
     ]);
 
