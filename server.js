@@ -180,62 +180,94 @@ function parseLeadInfo(text) {
   return null;
 }
 
-// Store lead in Notion database
-async function storeLead(leadData, callerPhone) {
+// Store lead in Notion database with retry logic
+async function storeLead(leadData, callerPhone, retryCount = 0) {
+  const maxRetries = 3;
+  
   try {
-    const response = await notion.pages.create({
-      parent: { database_id: process.env.NOTION_DATABASE_ID },
-      properties: {
-        'Name': {
-          title: [
-            {
-              text: {
-                content: leadData.name
+    console.log(`Attempting to store lead in Notion (attempt ${retryCount + 1})`);
+    
+    const response = await Promise.race([
+      notion.pages.create({
+        parent: { database_id: process.env.NOTION_DATABASE_ID },
+        properties: {
+          'Name': {
+            title: [
+              {
+                text: {
+                  content: leadData.name || 'Unknown'
+                }
               }
-            }
-          ]
-        },
-        'Business': {
-          rich_text: [
-            {
-              text: {
-                content: leadData.business || 'N/A'
+            ]
+          },
+          'Business': {
+            rich_text: [
+              {
+                text: {
+                  content: leadData.business || 'N/A'
+                }
               }
-            }
-          ]
-        },
-        'Email': {
-          email: leadData.email || null
-        },
-        'Phone': {
-          phone_number: leadData.phone || null
-        },
-        'Caller': {
-          rich_text: [
-            {
-              text: {
-                content: callerPhone
+            ]
+          },
+          'Email': {
+            rich_text: [
+              {
+                text: {
+                  content: leadData.email || 'N/A'
+                }
               }
+            ]
+          },
+          'Phone': {
+            rich_text: [
+              {
+                text: {
+                  content: leadData.phone || 'N/A'
+                }
+              }
+            ]
+          },
+          'Caller': {
+            rich_text: [
+              {
+                text: {
+                  content: callerPhone
+                }
+              }
+            ]
+          },
+          'Date Added': {
+            date: {
+              start: new Date().toISOString().split('T')[0]
             }
-          ]
-        },
-        'Date Added': {
-          date: {
-            start: new Date().toISOString().split('T')[0]
-          }
-        },
-        'Status': {
-          select: {
-            name: 'New Lead'
+          },
+          'Status': {
+            rich_text: [
+              {
+                text: {
+                  content: 'New Lead'
+                }
+              }
+            ]
           }
         }
-      }
-    });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 10000) // 10 second timeout
+      )
+    ]);
 
-    console.log('Lead stored in Notion:', response.id);
+    console.log('Lead stored in Notion successfully:', response.id);
     return response;
   } catch (error) {
-    console.error('Error storing lead in Notion:', error);
+    console.error(`Error storing lead in Notion (attempt ${retryCount + 1}):`, error.message);
+    
+    if (retryCount < maxRetries && (error.code === 'notionhq_client_request_timeout' || error.message === 'Timeout')) {
+      console.log(`Retrying in ${(retryCount + 1) * 2} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+      return storeLead(leadData, callerPhone, retryCount + 1);
+    }
+    
     throw error;
   }
 }
