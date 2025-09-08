@@ -186,6 +186,8 @@ async function storeLead(leadData, callerPhone, retryCount = 0) {
   
   try {
     console.log(`Attempting to store lead in Notion (attempt ${retryCount + 1})`);
+    console.log('Lead data:', JSON.stringify(leadData));
+    console.log('Database ID:', process.env.NOTION_DATABASE_ID);
     
     const response = await Promise.race([
       notion.pages.create({
