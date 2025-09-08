@@ -197,84 +197,76 @@ function parseLeadInfo(text) {
   return null;
 }
 
-// Store lead in Notion database with retry logic
-async function storeLead(leadData, callerPhone, retryCount = 0) {
-  const maxRetries = 3;
-  
+// Store lead in Notion database - simplified version
+async function storeLead(leadData, callerPhone) {
   try {
-    console.log(`Attempting to store lead in Notion (attempt ${retryCount + 1})`);
-    console.log('Lead data:', JSON.stringify(leadData));
-    console.log('Database ID:', process.env.NOTION_DATABASE_ID);
+    console.log('Creating Notion page with data:', JSON.stringify({
+      name: leadData.name,
+      business: leadData.business,
+      email: leadData.email,
+      phone: leadData.phone || 'N/A',
+      caller: callerPhone
+    }));
     
-    const response = await Promise.race([
-      notion.pages.create({
-        parent: { database_id: process.env.NOTION_DATABASE_ID },
-        properties: {
-          'Name': {
-            title: [
-              {
-                text: {
-                  content: leadData.name || 'Unknown'
-                }
+    // Use exact same structure as working test endpoint
+    const response = await notion.pages.create({
+      parent: { database_id: process.env.NOTION_DATABASE_ID },
+      properties: {
+        'Name': {
+          title: [
+            {
+              text: {
+                content: leadData.name || 'WhatsApp Lead'
               }
-            ]
-          },
-          'Business': {
-            rich_text: [
-              {
-                text: {
-                  content: leadData.business || 'N/A'
-                }
-              }
-            ]
-          },
-          'Email': {
-            email: leadData.email || 'unknown@example.com'
-          },
-          'Phone': {
-            phone_number: leadData.phone || '000-000-0000'
-          },
-          'Caller': {
-            rich_text: [
-              {
-                text: {
-                  content: callerPhone
-                }
-              }
-            ]
-          },
-          'Date Added': {
-            date: {
-              start: new Date().toISOString().split('T')[0]
             }
-          },
-          'Status': {
-            rich_text: [
-              {
-                text: {
-                  content: 'New Lead'
-                }
+          ]
+        },
+        'Business': {
+          rich_text: [
+            {
+              text: {
+                content: leadData.business || 'N/A'
               }
-            ]
+            }
+          ]
+        },
+        'Email': {
+          email: leadData.email
+        },
+        'Phone': {
+          phone_number: leadData.phone || '555-000-0000'
+        },
+        'Caller': {
+          rich_text: [
+            {
+              text: {
+                content: callerPhone
+              }
+            }
+          ]
+        },
+        'Date Added': {
+          date: {
+            start: new Date().toISOString().split('T')[0]
           }
+        },
+        'Status': {
+          rich_text: [
+            {
+              text: {
+                content: 'New Lead'
+              }
+            }
+          ]
         }
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 8000) // Shorter timeout
-      )
-    ]);
+      }
+    });
 
-    console.log('Lead stored in Notion successfully:', response.id);
+    console.log('SUCCESS: Lead stored in Notion with ID:', response.id);
     return response;
   } catch (error) {
-    console.error(`Error storing lead in Notion (attempt ${retryCount + 1}):`, error.message);
-    
-    if (retryCount < maxRetries && (error.code === 'notionhq_client_request_timeout' || error.message === 'Timeout')) {
-      console.log(`Retrying in ${(retryCount + 1) * 2} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
-      return storeLead(leadData, callerPhone, retryCount + 1);
-    }
-    
+    console.error('ERROR storing lead in Notion:', error.message);
+    console.error('Full error:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
