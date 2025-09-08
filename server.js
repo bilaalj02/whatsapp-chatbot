@@ -358,6 +358,46 @@ app.get('/test-notion', async (req, res) => {
   }
 });
 
+// Test WhatsApp API token
+app.get('/test-whatsapp', async (req, res) => {
+  try {
+    console.log('Testing WhatsApp API...');
+    
+    const response = await Promise.race([
+      axios.post(
+        `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+        {
+          messaging_product: 'whatsapp',
+          to: '17078051915', // Your test number
+          text: { body: 'Test message from bot' }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        }
+      ),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('WhatsApp API timeout')), 15000)
+      )
+    ]);
+    
+    console.log('WhatsApp test successful!');
+    res.status(200).json({ 
+      status: 'WhatsApp API working', 
+      response: response.data
+    });
+  } catch (error) {
+    console.error('WhatsApp test failed:', error.response?.data || error.message);
+    res.status(500).json({ 
+      status: 'WhatsApp API failed', 
+      error: error.response?.data || error.message
+    });
+  }
+});
+
 // Test creating a simple page
 app.get('/test-create', async (req, res) => {
   try {
