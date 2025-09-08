@@ -78,26 +78,23 @@ async function handleIncomingMessage(message, phoneNumberId) {
       
       if (leadData) {
         console.log('Lead data is valid, attempting to store...');
-        try {
-          // Store lead in Notion
-          const result = await storeLead(leadData, fromNumber);
-          console.log('Successfully stored lead:', result.id);
-          
-          // Send confirmation message
-          await sendWhatsAppMessage(
-            fromNumber,
-            phoneNumberId,
-            '✅ Lead information received and stored successfully!'
-          );
-        } catch (storeError) {
-          console.error('Failed to store lead:', storeError);
-          // Send error message
-          await sendWhatsAppMessage(
-            fromNumber,
-            phoneNumberId,
-            '❌ Sorry, there was an error storing your information. Please try again.'
-          );
-        }
+        // Send immediate confirmation
+        await sendWhatsAppMessage(
+          fromNumber,
+          phoneNumberId,
+          '✅ Lead information received! Processing...'
+        );
+        
+        // Process lead storage asynchronously (don't await)
+        setTimeout(async () => {
+          try {
+            console.log('Processing lead storage asynchronously...');
+            const result = await storeLead(leadData, fromNumber);
+            console.log('Successfully stored lead:', result.id);
+          } catch (storeError) {
+            console.error('Failed to store lead:', storeError);
+          }
+        }, 100);
       } else {
         console.log('Lead data is invalid or missing required fields');
         // Send instructions on how to format lead info
