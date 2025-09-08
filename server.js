@@ -1,0 +1,276 @@
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const axios = require('axios');
+const { Client } = require('@notionhq/client');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(bodyParser.json());
+
+// Initialize Notion client
+const notion = new Client({
+  auth: process.env.NOTION_TOKEN,
+});
+
+// WhatsApp webhook verification
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+      console.log('Webhook verified');
+      res.status(200).send(challenge);
+    } else {
+      res.sendStatus(403);
+    }
+  }
+});
+
+// WhatsApp webhook endpoint
+app.post('/webhook', async (req, res) => {
+  try {
+    const body = req.body;
+
+    if (body.object === 'whatsapp_business_account') {
+      body.entry.forEach(async (entry) => {
+        const changes = entry.changes;
+        
+        changes.forEach(async (change) => {
+          if (change.field === 'messages') {
+            const messages = change.value.messages;
+            
+            if (messages) {
+              for (const message of messages) {
+                await handleIncomingMessage(message, change.value.metadata.phone_number_id);
+              }
+            }
+          }
+        });
+      });
+
+      res.status(200).send('EVENT_RECEIVED');
+    } else {
+      res.sendStatus(404);
+    }
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Handle incoming WhatsApp messages
+async function handleIncomingMessage(message, phoneNumberId) {
+  try {
+    if (message.type === 'text') {
+      const messageText = message.text.body;
+      const fromNumber = message.from;
+      
+      console.log(`Received message from ${fromNumber}: ${messageText}`);
+      
+      // Parse lead information from message
+      const leadData = parseLeadInfo(messageText);
+      
+      if (leadData) {
+        // Store lead in Notion
+        await storeLead(leadData, fromNumber);
+        
+        // Send confirmation message
+        await sendWhatsAppMessage(
+          fromNumber,
+          phoneNumberId,
+          '✅ Lead information received and stored successfully!'
+        );
+      } else {
+        // Send instructions on how to format lead info
+        await sendWhatsAppMessage(
+          fromNumber,
+          phoneNumberId,
+          'Please format lead information as:\n\n' +
+          'Name: [Lead Name]\n' +
+          'Business: [Business Name]\n' +
+          'Email: [Email Address]\n' +
+          'Phone: [Phone Number]'
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error handling message:', error);
+  }
+}
+
+// Parse lead information from message text
+function parseLeadInfo(text) {
+  const leadData = {};
+  
+  // Try labeled format first
+  const labeledPatterns = {
+    name: /name:\s*([^\n]+)/i,
+    business: /business:\s*([^\n]+)/i,
+    email: /email:\s*([^\n\s]+)/i,
+    phone: /phone:\s*([^\n]+)/i
+  };
+  
+  // Extract labeled information
+  for (const [key, pattern] of Object.entries(labeledPatterns)) {
+    const match = text.match(pattern);
+    if (match) {
+      leadData[key] = match[1].trim();
+    }
+  }
+  
+  // If we have labeled data, return it
+  if (leadData.name && (leadData.email || leadData.phone)) {
+    return leadData;
+  }
+  
+  // Try unlabeled format - extract email, phone, and assume rest is name/business
+  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const phoneMatch = text.match(/[\+]?[1-9]?[\d\s\-\(\)]{10,}/);
+  
+  if (emailMatch) {
+    leadData.email = emailMatch[1];
+    
+    // Remove email from text to find name/business
+    let remainingText = text.replace(emailMatch[0], '').trim();
+    
+    // Remove phone if found
+    if (phoneMatch) {
+      leadData.phone = phoneMatch[0].trim();
+      remainingText = remainingText.replace(phoneMatch[0], '').trim();
+    }
+    
+    // Split remaining text - first part is likely name, second part business
+    const parts = remainingText.split(/\s{2,}|\n/).filter(part => part.trim().length > 0);
+    
+    if (parts.length >= 1) {
+      // If email domain suggests business name, use that logic
+      const domain = emailMatch[1].split('@')[0];
+      
+      if (parts.length === 1) {
+        // Only one part - check if it looks like a business name
+        const singlePart = parts[0].trim();
+        if (singlePart.toLowerCase().includes('homes') || 
+            singlePart.toLowerCase().includes('construction') ||
+            singlePart.toLowerCase().includes('llc') ||
+            singlePart.toLowerCase().includes('inc') ||
+            singlePart.toLowerCase().includes('corp')) {
+          leadData.business = singlePart;
+          leadData.name = singlePart; // Use business name as contact name
+        } else {
+          leadData.name = singlePart;
+        }
+      } else {
+        // Multiple parts - first is name, rest is business
+        leadData.name = parts[0].trim();
+        leadData.business = parts.slice(1).join(' ').trim();
+      }
+    } else {
+      // No clear text parts, use email prefix as name fallback
+      leadData.name = domain;
+    }
+    
+    return leadData;
+  }
+  
+  return null;
+}
+
+// Store lead in Notion database
+async function storeLead(leadData, callerPhone) {
+  try {
+    const response = await notion.pages.create({
+      parent: { database_id: process.env.NOTION_DATABASE_ID },
+      properties: {
+        'Name': {
+          title: [
+            {
+              text: {
+                content: leadData.name
+              }
+            }
+          ]
+        },
+        'Business': {
+          rich_text: [
+            {
+              text: {
+                content: leadData.business || 'N/A'
+              }
+            }
+          ]
+        },
+        'Email': {
+          email: leadData.email || null
+        },
+        'Phone': {
+          phone_number: leadData.phone || null
+        },
+        'Caller': {
+          rich_text: [
+            {
+              text: {
+                content: callerPhone
+              }
+            }
+          ]
+        },
+        'Date Added': {
+          date: {
+            start: new Date().toISOString().split('T')[0]
+          }
+        },
+        'Status': {
+          select: {
+            name: 'New Lead'
+          }
+        }
+      }
+    });
+
+    console.log('Lead stored in Notion:', response.id);
+    return response;
+  } catch (error) {
+    console.error('Error storing lead in Notion:', error);
+    throw error;
+  }
+}
+
+// Send WhatsApp message
+async function sendWhatsAppMessage(to, phoneNumberId, message) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        to: to,
+        text: { body: message }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('Message sent successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error sending WhatsApp message:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+  console.log(`WhatsApp Lead Bot server running on port ${PORT}`);
+});
