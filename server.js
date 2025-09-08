@@ -78,12 +78,22 @@ async function handleIncomingMessage(message, phoneNumberId) {
       
       if (leadData) {
         console.log('Lead data is valid, attempting to store...');
+        console.log('About to send WhatsApp confirmation message...');
+        console.log('From number:', fromNumber);
+        console.log('Phone number ID:', phoneNumberId);
+        
         // Send immediate confirmation
-        await sendWhatsAppMessage(
-          fromNumber,
-          phoneNumberId,
-          '✅ Lead information received! Processing...'
-        );
+        try {
+          console.log('Calling sendWhatsAppMessage function...');
+          await sendWhatsAppMessage(
+            fromNumber,
+            phoneNumberId,
+            '✅ Lead information received! Processing...'
+          );
+          console.log('WhatsApp message sent successfully!');
+        } catch (whatsappError) {
+          console.error('WhatsApp message failed:', whatsappError);
+        }
         
         // Process lead storage asynchronously (don't await)
         setTimeout(async () => {
