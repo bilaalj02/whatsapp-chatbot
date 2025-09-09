@@ -77,49 +77,21 @@ async function handleIncomingMessage(message, phoneNumberId) {
       console.log('Parsed lead data:', JSON.stringify(leadData));
       
       if (leadData) {
-        console.log('Lead data is valid, attempting to store...');
-        console.log('About to send WhatsApp confirmation message...');
-        console.log('From number:', fromNumber);
-        console.log('Phone number ID:', phoneNumberId);
+        console.log('Lead data is valid, storing silently...');
         
-        // Send immediate confirmation
-        try {
-          console.log('Calling sendWhatsAppMessage function...');
-          await sendWhatsAppMessage(
-            fromNumber,
-            phoneNumberId,
-            '✅ Lead information received! Processing...'
-          );
-          console.log('WhatsApp message sent successfully!');
-        } catch (whatsappError) {
-          console.error('WhatsApp message failed:', whatsappError);
-        }
-        
-        // Process lead storage asynchronously (don't await)
+        // Process lead storage asynchronously (silent mode)
         setTimeout(async () => {
           try {
-            console.log('Processing lead storage asynchronously...');
+            console.log('Processing lead storage silently...');
             const result = await storeLead(leadData, fromNumber);
-            console.log('Successfully stored lead:', result.id);
+            console.log('Successfully stored lead silently:', result.id);
           } catch (storeError) {
             console.error('Failed to store lead:', storeError);
           }
         }, 100);
       } else {
-        console.log('Lead data is invalid or missing required fields');
-        // Send instructions on how to format lead info
-        await sendWhatsAppMessage(
-          fromNumber,
-          phoneNumberId,
-          'Please format lead information as:\n\n' +
-          'Name: [Lead Name]\n' +
-          'Business: [Business Name]\n' +
-          'Email: [Email Address]\n' +
-          'Phone: [Phone Number]\n\n' +
-          'Or simply send:\n' +
-          'email@example.com\n' +
-          'Business Name'
-        );
+        console.log('Lead data is invalid - ignoring message silently');
+        // Do nothing for invalid messages (silent mode)
       }
     }
   } catch (error) {
